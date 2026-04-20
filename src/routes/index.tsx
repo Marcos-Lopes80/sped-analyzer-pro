@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { RequireAuth } from "@/components/require-auth";
 import { AppShell } from "@/components/app-shell";
-import { useSpedEntries } from "@/lib/sped/store";
+import { useSpedFiles, type SpedFileRow } from "@/lib/sped/store";
 import { layoutLabel, formatBytes } from "@/lib/sped/parser";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +15,8 @@ import {
   TrendingUp,
   Building2,
   CalendarRange,
+  Loader2,
 } from "lucide-react";
-import { Link } from "@tanstack/react-router";
 import {
   ResponsiveContainer,
   BarChart,
@@ -45,33 +45,45 @@ export const Route = createFileRoute("/")({
 });
 
 function Dashboard() {
-  const entries = useSpedEntries();
+  const { data: entries = [], isLoading, error } = useSpedFiles();
 
-  if (entries.length === 0) {
-    return <EmptyState />;
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
   }
 
-  const totalLines = entries.reduce((s, e) => s + e.summary.totalLines, 0);
-  const totalBytes = entries.reduce((s, e) => s + e.summary.fileSize, 0);
-  const totalWarnings = entries.reduce((s, e) => s + e.summary.warnings.length, 0);
-  const layouts = new Set(entries.map((e) => e.summary.layout));
+  if (error) {
+    return (
+      <div className="mx-auto max-w-md py-20 text-center text-sm text-destructive">
+        Falha ao carregar arquivos: {(error as Error).message}
+      </div>
+    );
+  }
 
-  // Aggregate block counts across all entries
+  if (entries.length === 0) return <EmptyState />;
+
+  const totalLines = entries.reduce((s: number, e: SpedFileRow) => s + e.total_lines, 0);
+  const totalBytes = entries.reduce((s: number, e: SpedFileRow) => s + e.file_size, 0);
+  const totalWarnings = entries.reduce((s: number, e: SpedFileRow) => s + (e.warnings?.length ?? 0), 0);
+  const layouts = new Set(entries.map((e) => e.layout));
+
   const blockAgg: Record<string, number> = {};
   entries.forEach((e) =>
-    Object.entries(e.summary.blockCounts).forEach(([b, c]) => {
-      blockAgg[b] = (blockAgg[b] ?? 0) + c;
+    Object.entries(e.block_counts ?? {}).forEach(([b, c]) => {
+      blockAgg[b] = (blockAgg[b] ?? 0) + (c as number);
     })
   );
   const blockData = Object.entries(blockAgg)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([block, count]) => ({ block: `Bloco ${block}`, count }));
 
-  // Top 8 record types
   const recAgg: Record<string, number> = {};
   entries.forEach((e) =>
-    Object.entries(e.summary.recordCounts).forEach(([r, c]) => {
-      recAgg[r] = (recAgg[r] ?? 0) + c;
+    Object.entries(e.record_counts ?? {}).forEach(([r, c]) => {
+      recAgg[r] = (recAgg[r] ?? 0) + (c as number);
     })
   );
   const topRecords = Object.entries(recAgg)
@@ -80,7 +92,7 @@ function Dashboard() {
     .map(([reg, count]) => ({ reg, count }));
 
   const layoutData = entries.reduce<Record<string, number>>((acc, e) => {
-    const l = layoutLabel(e.summary.layout);
+    const l = layoutLabel(e.layout);
     acc[l] = (acc[l] ?? 0) + 1;
     return acc;
   }, {});
@@ -100,15 +112,13 @@ function Dashboard() {
         </Button>
       </header>
 
-      {/* KPI cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard icon={FileText} label="Arquivos" value={entries.length.toString()} hint={`${layouts.size} layouts distintos`} />
         <KpiCard icon={Database} label="Linhas processadas" value={totalLines.toLocaleString("pt-BR")} hint={formatBytes(totalBytes)} />
         <KpiCard icon={AlertTriangle} label="Avisos" value={totalWarnings.toString()} hint={totalWarnings === 0 ? "Tudo conforme" : "Verificar abaixo"} tone={totalWarnings > 0 ? "warning" : "success"} />
-        <KpiCard icon={TrendingUp} label="Maior arquivo" value={formatBytes(Math.max(...entries.map((e) => e.summary.fileSize)))} hint="por tamanho" />
+        <KpiCard icon={TrendingUp} label="Maior arquivo" value={formatBytes(Math.max(...entries.map((e) => e.file_size)))} hint="por tamanho" />
       </div>
 
-      {/* Charts */}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2 border-border/60 bg-card">
           <CardHeader>
@@ -169,7 +179,6 @@ function Dashboard() {
         </Card>
       </div>
 
-      {/* Top records */}
       <Card className="border-border/60 bg-card">
         <CardHeader>
           <CardTitle className="text-base">Registros mais frequentes</CardTitle>
@@ -187,7 +196,6 @@ function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Recent files */}
       <Card className="border-border/60 bg-card">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -204,20 +212,20 @@ function Dashboard() {
               <div key={e.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border/60 bg-background/40 p-3 text-sm">
                 <FileText className="h-4 w-4 text-muted-foreground" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{e.summary.fileName}</div>
+                  <div className="truncate font-medium">{e.file_name}</div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <Building2 className="h-3 w-3" />
-                    <span className="truncate">{e.summary.companyName ?? "—"}</span>
+                    <span className="truncate">{e.company_name ?? "—"}</span>
                     <span>•</span>
                     <CalendarRange className="h-3 w-3" />
-                    <span>{e.summary.period.start ?? "—"} – {e.summary.period.end ?? "—"}</span>
+                    <span>{e.period_start ?? "—"} – {e.period_end ?? "—"}</span>
                   </div>
                 </div>
-                <Badge variant="outline" className="border-primary/30 text-primary">{layoutLabel(e.summary.layout)}</Badge>
-                <span className="tabular-nums text-xs text-muted-foreground">{e.summary.totalLines.toLocaleString("pt-BR")} linhas</span>
-                {e.summary.warnings.length > 0 ? (
+                <Badge variant="outline" className="border-primary/30 text-primary">{layoutLabel(e.layout)}</Badge>
+                <span className="tabular-nums text-xs text-muted-foreground">{e.total_lines.toLocaleString("pt-BR")} linhas</span>
+                {(e.warnings?.length ?? 0) > 0 ? (
                   <Badge variant="outline" className="border-warning/40 text-warning">
-                    <AlertTriangle className="mr-1 h-3 w-3" /> {e.summary.warnings.length}
+                    <AlertTriangle className="mr-1 h-3 w-3" /> {e.warnings.length}
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="border-success/40 text-success">
@@ -234,11 +242,7 @@ function Dashboard() {
 }
 
 function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-  tone = "default",
+  icon: Icon, label, value, hint, tone = "default",
 }: {
   icon: typeof FileText;
   label: string;
@@ -246,8 +250,7 @@ function KpiCard({
   hint?: string;
   tone?: "default" | "success" | "warning";
 }) {
-  const toneClass =
-    tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-primary";
+  const toneClass = tone === "success" ? "text-success" : tone === "warning" ? "text-warning" : "text-primary";
   return (
     <Card className="border-border/60 bg-card">
       <CardContent className="p-5">
@@ -270,8 +273,8 @@ function EmptyState() {
       </div>
       <h2 className="mt-6 text-2xl font-semibold tracking-tight">Comece importando um arquivo SPED</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Aceitamos EFD ICMS/IPI, EFD Contribuições, ECD e ECF. Os arquivos são processados localmente em streaming —
-        suportamos arquivos de qualquer tamanho.
+        Aceitamos EFD ICMS/IPI, EFD Contribuições, ECD e ECF. Os arquivos são processados em streaming
+        e armazenados com segurança no seu workspace.
       </p>
       <Button asChild size="lg" className="mt-6">
         <Link to="/upload"><Upload className="mr-2 h-4 w-4" /> Importar SPED</Link>

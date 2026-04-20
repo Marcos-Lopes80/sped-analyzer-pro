@@ -1,14 +1,16 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { useQueryClient } from "@tanstack/react-query";
 import { RequireAuth } from "@/components/require-auth";
 import { AppShell } from "@/components/app-shell";
+import { useAuth } from "@/lib/auth-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { parseSpedFile, formatBytes, layoutLabel, type SpedSummary } from "@/lib/sped/parser";
-import { spedStore } from "@/lib/sped/store";
+import { persistSpedFile, SPED_FILES_QK } from "@/lib/sped/store";
 import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -27,42 +29,52 @@ export const Route = createFileRoute("/upload")({
 interface ParseJob {
   file: File;
   progress: number;
-  status: "queued" | "parsing" | "done" | "error";
+  status: "queued" | "parsing" | "uploading" | "done" | "error";
   summary?: SpedSummary;
   error?: string;
 }
 
 function UploadPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const qc = useQueryClient();
   const [jobs, setJobs] = useState<ParseJob[]>([]);
 
   const updateJob = (idx: number, patch: Partial<ParseJob>) =>
     setJobs((prev) => prev.map((j, i) => (i === idx ? { ...j, ...patch } : j)));
 
-  const processFile = useCallback(async (file: File, idx: number) => {
-    updateJob(idx, { status: "parsing", progress: 0 });
-    try {
-      const summary = await parseSpedFile(file, {
-        onProgress: (p) => updateJob(idx, { progress: p }),
-      });
-      spedStore.add(summary);
-      updateJob(idx, { status: "done", progress: 1, summary });
-      toast.success(`${file.name} processado`, {
-        description: `${summary.totalLines.toLocaleString("pt-BR")} linhas em ${(summary.durationMs / 1000).toFixed(1)}s`,
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      updateJob(idx, { status: "error", error: msg });
-      toast.error(`Falha ao processar ${file.name}`, { description: msg });
-    }
-  }, []);
+  const processFile = useCallback(
+    async (file: File, idx: number) => {
+      if (!user) return;
+      updateJob(idx, { status: "parsing", progress: 0 });
+      try {
+        const summary = await parseSpedFile(file, {
+          // Reserve last 10% of progress bar for upload phase
+          onProgress: (p) => updateJob(idx, { progress: p * 0.9 }),
+        });
+
+        updateJob(idx, { status: "uploading", progress: 0.92, summary });
+        await persistSpedFile({ file, summary, userId: user.id });
+        updateJob(idx, { status: "done", progress: 1 });
+
+        qc.invalidateQueries({ queryKey: SPED_FILES_QK });
+        toast.success(`${file.name} salvo`, {
+          description: `${summary.totalLines.toLocaleString("pt-BR")} linhas em ${(summary.durationMs / 1000).toFixed(1)}s`,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro desconhecido";
+        updateJob(idx, { status: "error", error: msg });
+        toast.error(`Falha em ${file.name}`, { description: msg });
+      }
+    },
+    [user, qc]
+  );
 
   const onDrop = useCallback(
     (accepted: File[]) => {
       const start = jobs.length;
       const newJobs: ParseJob[] = accepted.map((f) => ({ file: f, progress: 0, status: "queued" }));
       setJobs((prev) => [...prev, ...newJobs]);
-      // Process sequentially to keep memory low
       (async () => {
         for (let i = 0; i < accepted.length; i++) {
           await processFile(accepted[i], start + i);
@@ -85,7 +97,7 @@ function UploadPage() {
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Importar SPED</h1>
         <p className="text-sm text-muted-foreground">
-          Processamento por streaming — arquivos grandes (centenas de MB) sem carregar tudo em memória.
+          Os arquivos são processados em streaming e armazenados com segurança no seu workspace.
         </p>
       </header>
 
@@ -135,6 +147,7 @@ function UploadPage() {
 }
 
 function JobRow({ job, onRemove }: { job: ParseJob; onRemove: () => void }) {
+  const statusLabel = job.status === "parsing" ? "Analisando" : job.status === "uploading" ? "Salvando" : null;
   return (
     <div className="rounded-md border border-border/60 bg-background/40 p-3">
       <div className="flex items-center gap-3">
@@ -142,15 +155,13 @@ function JobRow({ job, onRemove }: { job: ParseJob; onRemove: () => void }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-sm font-medium">{job.file.name}</span>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-              {formatBytes(job.file.size)}
-            </span>
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatBytes(job.file.size)}</span>
           </div>
-          {job.status === "parsing" && (
+          {(job.status === "parsing" || job.status === "uploading") && (
             <div className="mt-2 flex items-center gap-2">
               <Progress value={job.progress * 100} className="h-1.5 flex-1" />
-              <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
-                {Math.round(job.progress * 100)}%
+              <span className="w-16 text-right text-xs tabular-nums text-muted-foreground">
+                {statusLabel} {Math.round(job.progress * 100)}%
               </span>
             </div>
           )}
@@ -161,9 +172,7 @@ function JobRow({ job, onRemove }: { job: ParseJob; onRemove: () => void }) {
               </span>
               <span>{job.summary.totalLines.toLocaleString("pt-BR")} linhas</span>
               {job.summary.companyName && <span className="truncate">· {job.summary.companyName}</span>}
-              {job.summary.period.start && (
-                <span>· {job.summary.period.start}–{job.summary.period.end}</span>
-              )}
+              {job.summary.period.start && <span>· {job.summary.period.start}–{job.summary.period.end}</span>}
               {job.summary.warnings.length > 0 && (
                 <span className="inline-flex items-center gap-1 text-warning">
                   <AlertTriangle className="h-3 w-3" /> {job.summary.warnings.length} aviso(s)

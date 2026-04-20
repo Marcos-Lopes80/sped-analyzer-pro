@@ -138,11 +138,18 @@ const SpedDashboard = () => {
                 </tr>
               </thead>
               <tbody className="text-sm text-gray-600">
-                <TableRow linha="1025" bloco="C100" desc="Nota fiscal com valor divergente" tipo="Erro Fiscal" isCritical />
-                <TableRow linha="2045" bloco="C170" desc="Produto sem NCM informado" tipo="Dados Inconsistentes" />
-                <TableRow linha="3012" bloco="0150" desc="Município inválido para a UF de SP" tipo="Erro Fiscal" isCritical />
-                <TableRow linha="6164" bloco="E110" desc="Diferença de arredondamento aceitável" tipo="Aviso" isWarning />
-              </tbody>
+                {detailedErrors.map((item, index) => (
+                  <TableRow
+                  key={index}
+                  linha={item.linha}
+                  bloco={item.bloco}
+                  desc={item.desc}
+                  tipo={item.tipo}
+                  isCritical={item.tipo === "CRÍTICO"}
+                  isWarning={item.tipo === "AVISO"}
+    />
+  ))}
+</tbody>
             </table>
           </div>
         </div>

@@ -47,6 +47,69 @@ export type Database = {
         }
         Relationships: []
       }
+      sped_files: {
+        Row: {
+          block_counts: Json
+          cnpj: string | null
+          company_name: string | null
+          created_at: string
+          duration_ms: number
+          file_name: string
+          file_size: number
+          id: string
+          layout: string
+          period_end: string | null
+          period_start: string | null
+          record_counts: Json
+          storage_path: string
+          total_lines: number
+          uf: string | null
+          updated_at: string
+          user_id: string
+          warnings: Json
+        }
+        Insert: {
+          block_counts?: Json
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string
+          duration_ms?: number
+          file_name: string
+          file_size: number
+          id?: string
+          layout: string
+          period_end?: string | null
+          period_start?: string | null
+          record_counts?: Json
+          storage_path: string
+          total_lines?: number
+          uf?: string | null
+          updated_at?: string
+          user_id: string
+          warnings?: Json
+        }
+        Update: {
+          block_counts?: Json
+          cnpj?: string | null
+          company_name?: string | null
+          created_at?: string
+          duration_ms?: number
+          file_name?: string
+          file_size?: number
+          id?: string
+          layout?: string
+          period_end?: string | null
+          period_start?: string | null
+          record_counts?: Json
+          storage_path?: string
+          total_lines?: number
+          uf?: string | null
+          updated_at?: string
+          user_id?: string
+          warnings?: Json
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

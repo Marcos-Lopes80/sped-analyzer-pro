@@ -1,0 +1,36 @@
+messages:
+  - role: system
+    content: |
+      public class SpedParser {
+
+          public List<Registro> parse(File file) throws Exception {
+
+              List<Registro> registros = new ArrayList<>();
+
+              BufferedReader br = new BufferedReader(
+                  new InputStreamReader(new FileInputStream(file), "ISO-8859-1")
+              );
+
+              String linha;
+
+              while ((linha = br.readLine()) != null) {
+
+                  linha = linha.trim();
+
+                  if (linha.isEmpty()) continue;
+
+                  String[] campos = linha.split("\\|");
+
+                  if (campos.length < 2) continue;
+
+                  Registro r = new Registro();
+                  r.setTipo(campos[1]);
+                  r.setCampos(campos);
+
+                  registros.add(r);
+              }
+
+              return registros;
+          }
+      }
+model: cohere/cohere-command-r-08-2024

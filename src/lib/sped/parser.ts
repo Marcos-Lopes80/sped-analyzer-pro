@@ -1,71 +1,100 @@
-// src/lib/spedParser.ts
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { Session, User } from "@supabase/supabase-js";
 
-export interface SpedAuditResult {
-  contribuinte: { nome: string; cnpj: string };
-  erros: any[];
-  stats: { linhas: number; criticos: number; avisos: number };
+type AppRole = "admin" | "auditor" | "viewer";
+
+interface AuthContextType {
+  user: User | null;
+  session: Session | null;
+  roles: AppRole[];
+  loading: boolean;
+  isAdmin: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
 }
 
-export const parseSpedStreaming = async (file: File): Promise<SpedAuditResult> => {
-  const reader = file.stream().getReader();
-  const decoder = new TextDecoder('latin1'); // SPED usa tipicamente Latin1/Windows-1252
-  
-  let nome = "";
-  let cnpj = "";
-  let totalLinhas = 0;
-  const listaErros: any[] = [];
-  const mapaProdutos = new Map();
-  
-  let partialLine = "";
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = (partialLine + chunk).split('\n');
-    partialLine = lines.pop() || "";
-
-    for (const line of lines) {
-      totalLinhas++;
-      const reg = line.split('|');
-      if (reg.length < 2) continue;
-
-      const tipoReg = reg[1];
-
-      // REGRA 0000: Preservação da Identidade (Não criticar)
-      if (tipoReg === "0000") {
-        nome = reg[6];
-        cnpj = reg[7];
-      }
-
-      // REGRA 0200: Cadastro Mestre
-      if (tipoReg === "0200") {
-        mapaProdutos.set(reg[2], { desc: reg[3], ncm: reg[8] });
-      }
-
-      // CRUZAMENTO DE OURO: C170 vs 0200
-      if (tipoReg === "C170") {
-        const codItem = reg[3];
-        if (!mapaProdutos.has(codItem)) {
-          listaErros.push({
-            linha: totalLinhas,
-            bloco: "C170",
-            desc: `Item [${codItem}] vendido sem estar cadastrado no Bloco 0200.`,
-            tipo: "CRÍTICO"
-          });
-        }
-      }
-    }
-  }
-
-  return {
-    contribuinte: { nome, cnpj },
-    erros: listaErros,
-    stats: { 
-      linhas: totalLinhas, 
-      criticos: listaErros.length,
-      avisos: 0 
-    }
+  const fetchRoles = async (userId: string) => {
+    const { data } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    setRoles((data?.map((r) => r.role as AppRole)) ?? []);
   };
-};
+
+  useEffect(() => {
+    // Set up listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sess) => {
+      setSession(sess);
+      setUser(sess?.user ?? null);
+      if (sess?.user) {
+        // Defer to avoid deadlock
+        setTimeout(() => fetchRoles(sess.user.id), 0);
+      } else {
+        setRoles([]);
+      }
+    });
+
+    // THEN check existing session
+    supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      setSession(sess);
+      setUser(sess?.user ?? null);
+      if (sess?.user) fetchRoles(sess.user.id);
+      setLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+  };
+
+  const resetPassword = async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+    return { error };
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    return { error };
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        roles,
+        loading,
+        isAdmin: roles.includes("admin"),
+        signIn,
+        signOut,
+        resetPassword,
+        updatePassword,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}

@@ -1,135 +1,28 @@
-@import "tailwindcss" source(none);
-@source "../src";
-@import "tw-animate-css";
+function analisarSped(content) {
+  const linhas = content.split("\n");
+  const resultado = { C: [], D: [], E: [], H: [], K: [], "1": [] };
 
-@custom-variant dark (&:is(.dark *));
+  linhas.forEach((linha, i) => {
+    if (linha.startsWith("|C100|") && !linha.includes("CFOP")) {
+      resultado.C.push({
+        linha: i + 1,
+        descricao: "CFOP ausente",
+        sugestao: "Verificar CFOP conforme tabela oficial",
+        trecho: linha
+      });
+    }
+    if (linha.startsWith("|D100|") && !linha.includes("VALOR")) {
+      resultado.D.push({
+        linha: i + 1,
+        descricao: "Valor não informado",
+        sugestao: "Inserir campo VALOR conforme exigência",
+        trecho: linha
+      });
+    }
+    // demais blocos seguem lógica semelhante
+  });
 
-/*
- * Precision Steel — Corporate Dark Design System
- * SPED Analyzer Pro
- *
- * Palette: deep slate base, steel grays, electric blue primary, amber alerts.
- * All colors in oklch. Use semantic tokens only — never hardcode in components.
- */
-
-@theme {
-  --color-primary: oklch(45% 0.16 255); /* Azul Vinsaura Profundo */
-  --color-accent: oklch(60% 0.20 250);  /* Azul Brilhante */
-  --color-critical: oklch(62% 0.22 25); /* Vermelho Alerta */
-  --color-warning: oklch(82% 0.18 85);  /* Amarelo Observação */
-  --color-success: oklch(72% 0.16 150); /* Verde Compliance */
-}
-/* Light mode (kept minimal — app defaults to dark) */
-:root {
-  --radius: 0.5rem;
-  --background: oklch(0.985 0.002 247);
-  --foreground: oklch(0.18 0.02 250);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.02 250);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.02 250);
-  --primary: oklch(0.55 0.18 245);
-  --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.95 0.01 250);
-  --secondary-foreground: oklch(0.25 0.02 250);
-  --muted: oklch(0.95 0.01 250);
-  --muted-foreground: oklch(0.5 0.02 250);
-  --accent: oklch(0.94 0.02 245);
-  --accent-foreground: oklch(0.25 0.02 250);
-  --destructive: oklch(0.58 0.22 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.62 0.15 155);
-  --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.72 0.16 75);
-  --warning-foreground: oklch(0.18 0.02 250);
-  --border: oklch(0.9 0.01 250);
-  --input: oklch(0.92 0.01 250);
-  --ring: oklch(0.55 0.18 245);
-  --chart-1: oklch(0.6 0.18 245);
-  --chart-2: oklch(0.65 0.14 155);
-  --chart-3: oklch(0.72 0.16 75);
-  --chart-4: oklch(0.6 0.2 25);
-  --chart-5: oklch(0.6 0.18 295);
-  --sidebar: oklch(0.97 0.005 250);
-  --sidebar-foreground: oklch(0.25 0.02 250);
-  --sidebar-primary: oklch(0.55 0.18 245);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.94 0.01 250);
-  --sidebar-accent-foreground: oklch(0.25 0.02 250);
-  --sidebar-border: oklch(0.9 0.01 250);
-  --sidebar-ring: oklch(0.55 0.18 245);
+  return resultado;
 }
 
-/* Precision Steel — primary dark theme */
-.dark {
-  --background: oklch(0.16 0.015 250);          /* #0E1420 deep slate */
-  --foreground: oklch(0.95 0.005 250);          /* near-white text */
-  --card: oklch(0.21 0.018 250);                /* steel panel */
-  --card-foreground: oklch(0.95 0.005 250);
-  --popover: oklch(0.21 0.018 250);
-  --popover-foreground: oklch(0.95 0.005 250);
-  --primary: oklch(0.68 0.17 240);              /* electric steel blue */
-  --primary-foreground: oklch(0.12 0.02 250);
-  --secondary: oklch(0.26 0.02 250);            /* secondary steel */
-  --secondary-foreground: oklch(0.95 0.005 250);
-  --muted: oklch(0.24 0.018 250);
-  --muted-foreground: oklch(0.68 0.015 250);
-  --accent: oklch(0.3 0.04 240);
-  --accent-foreground: oklch(0.95 0.005 250);
-  --destructive: oklch(0.65 0.21 22);           /* alert red */
-  --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.7 0.16 155);               /* compliance green */
-  --success-foreground: oklch(0.12 0.02 250);
-  --warning: oklch(0.78 0.16 75);               /* amber audit */
-  --warning-foreground: oklch(0.12 0.02 250);
-  --border: oklch(0.3 0.02 250);
-  --input: oklch(0.26 0.02 250);
-  --ring: oklch(0.68 0.17 240);
-  --chart-1: oklch(0.68 0.17 240);
-  --chart-2: oklch(0.7 0.16 155);
-  --chart-3: oklch(0.78 0.16 75);
-  --chart-4: oklch(0.65 0.21 22);
-  --chart-5: oklch(0.65 0.18 295);
-  --sidebar: oklch(0.13 0.015 250);             /* deeper than bg */
-  --sidebar-foreground: oklch(0.85 0.01 250);
-  --sidebar-primary: oklch(0.68 0.17 240);
-  --sidebar-primary-foreground: oklch(0.12 0.02 250);
-  --sidebar-accent: oklch(0.22 0.02 250);
-  --sidebar-accent-foreground: oklch(0.95 0.005 250);
-  --sidebar-border: oklch(0.26 0.02 250);
-  --sidebar-ring: oklch(0.68 0.17 240);
-}
-
-@layer base {
-  * {
-    border-color: var(--color-border);
-  }
-
-  html {
-    color-scheme: dark;
-  }
-
-  body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
-    font-feature-settings: "cv11", "ss01", "ss03";
-    -webkit-font-smoothing: antialiased;
-  }
-
-  /* Subtle steel texture on body */
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse at top, oklch(0.68 0.17 240 / 0.06), transparent 50%),
-      radial-gradient(ellipse at bottom, oklch(0.3 0.04 240 / 0.04), transparent 50%);
-    z-index: 0;
-  }
-
-  #root, main { position: relative; z-index: 1; }
-}
-
-/* Mono numerals for tabular financial data */
-.tabular-nums { font-variant-numeric: tabular-nums; }
+module.exports = { analisarSped };

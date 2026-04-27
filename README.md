@@ -1,12 +1,17 @@
-# SPED Analyzer Pro
+# Sped Analyzer Pro
 
-## Project Structure
-- **src/**: Contains the source code of the project.
-- **tests/**: Contains the unit and integration tests.
-- **docs/**: Contains the project documentation.
+Ferramenta avançada para análise de arquivos **SPED (Sistema Público de Escrituração Digital)**, desenvolvida em **TypeScript** com suporte a dashboards interativos e integração com **Supabase**.
 
-## Purpose
-SPED Analyzer Pro is designed to provide a comprehensive solution for processing and analyzing SPED (Public Digital Bookkeeping System) files in Brazil. It aims to streamline the compliance and reporting process for businesses.
+## 🚀 Funcionalidades
+- Parser de arquivos SPED com validação automática.
+- Dashboard interativo para visualização de dados fiscais.
+- Exportação de relatórios em múltiplos formatos.
+- Integração com banco de dados via Supabase.
+- Testes automatizados para garantir confiabilidade.
 
-## Usage
-To get started, clone the repository and follow the setup instructions in the documentation.
+## 🛠️ Tecnologias
+- **TypeScript** (principal linguagem)
+- **Vite** para build e desenvolvimento
+- **Supabase** para persistência
+- **ESLint** e **Prettier** para padronização de código
+- **GitHub Actions** para CI/CD
